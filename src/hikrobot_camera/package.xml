@@ -3,9 +3,8 @@
   <name>hikrobot_camera</name>
   <version>0.0.0</version>
   <description>Training scaffold for a ROS 2 Humble camera SDK assignment.</description>
-  <!-- Replace placeholder maintainer and choose a license before publishing. -->
-  <maintainer email="student@example.com">Student Name</maintainer>
-  <license>TODO</license>
+  <maintainer email="2696037822@qq.com">盛明伟</maintainer>
+  <license>Apache-2.0</license>
   <buildtool_depend>ament_cmake</buildtool_depend>
   <depend>rclcpp</depend>
   <exec_depend>launch</exec_depend>
