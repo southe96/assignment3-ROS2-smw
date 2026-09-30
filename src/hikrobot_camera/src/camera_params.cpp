@@ -12,7 +12,6 @@ namespace hikrobot_camera
 
 namespace
 {
-// 这 4 个参数需要写到相机上，其他参数（话题名等）不需要
 const char * const kCameraParameters[] = {"pixel_format", "exposure_time", "gain", "frame_rate"};
 
 bool isCameraParameter(const std::string & name)
@@ -31,7 +30,7 @@ std::string toText(double value)
   std::snprintf(text, sizeof(text), "%.3f", value);
   return text;
 }
-}  // namespace
+}
 
 rcl_interfaces::msg::SetParametersResult CameraNode::onSetParameters(
   const std::vector<rclcpp::Parameter> & params)
@@ -39,7 +38,6 @@ rcl_interfaces::msg::SetParametersResult CameraNode::onSetParameters(
   rcl_interfaces::msg::SetParametersResult result;
   result.successful = true;
 
-  // 节点自己在把"相机实际值"同步回参数，不需要再写一遍相机
   if (syncing_parameters_) {
     return result;
   }
@@ -58,7 +56,6 @@ rcl_interfaces::msg::SetParametersResult CameraNode::onSetParameters(
       }
     }
     if (!error.empty()) {
-      // successful = false 时，ROS 不会修改这个参数，ros2 param set 会显示 reason
       result.successful = false;
       result.reason = param.get_name() + ": " + error;
       RCLCPP_WARN(get_logger(), "设置失败 %s", result.reason.c_str());
@@ -71,7 +68,6 @@ rcl_interfaces::msg::SetParametersResult CameraNode::onSetParameters(
   return result;
 }
 
-// 调用前必须已经锁住 camera_mutex_，并且 handle_ 不是空的
 std::string CameraNode::applyCameraParameter(const rclcpp::Parameter & param)
 {
   const std::string & name = param.get_name();
@@ -90,7 +86,6 @@ std::string CameraNode::applyCameraParameter(const rclcpp::Parameter & param)
   return "";
 }
 
-// 先向相机读出范围，超出范围直接拒绝；在范围内才真正设置。成功返回空字符串
 std::string CameraNode::setFloatInRange(const char * key, double value)
 {
   MVCC_FLOATVALUE range;
@@ -112,7 +107,6 @@ std::string CameraNode::setFloatInRange(const char * key, double value)
 
 std::string CameraNode::setExposureTime(double value)
 {
-  // 手动设置曝光前先关掉自动曝光（0 = Off），否则会设置失败或被自动曝光改掉
   const int ret = MV_CC_SetEnumValue(handle_, "ExposureAuto", 0);
   if (ret != MV_OK) {
     RCLCPP_WARN(get_logger(), "关闭自动曝光失败：%s", sdkErrorToString(ret).c_str());
@@ -122,7 +116,6 @@ std::string CameraNode::setExposureTime(double value)
 
 std::string CameraNode::setGain(double value)
 {
-  // 同理，先关掉自动增益
   const int ret = MV_CC_SetEnumValue(handle_, "GainAuto", 0);
   if (ret != MV_OK) {
     RCLCPP_WARN(get_logger(), "关闭自动增益失败：%s", sdkErrorToString(ret).c_str());
@@ -132,7 +125,6 @@ std::string CameraNode::setGain(double value)
 
 std::string CameraNode::setFrameRate(double value)
 {
-  // value <= 0：关闭帧率限制，相机按曝光和带宽允许的最快速度出图
   if (value <= 0.0) {
     const int ret = MV_CC_SetBoolValue(handle_, "AcquisitionFrameRateEnable", false);
     if (ret != MV_OK) {
@@ -141,7 +133,6 @@ std::string CameraNode::setFrameRate(double value)
     return "";
   }
 
-  // value > 0：先检查范围，再打开帧率限制并设置
   MVCC_FLOATVALUE range;
   std::memset(&range, 0, sizeof(range));
   int ret = MV_CC_GetFloatValue(handle_, "AcquisitionFrameRate", &range);
@@ -165,13 +156,11 @@ std::string CameraNode::setFrameRate(double value)
 
 std::string CameraNode::setPixelFormat(const std::string & value)
 {
-  // 1. 必须是本节点支持的格式
   const PixelFormatInfo * format = findPixelFormatByName(value);
   if (format == nullptr) {
     return "本节点不支持 '" + value + "'，可选：" + supportedPixelFormatNames();
   }
 
-  // 2. 必须是这台相机支持的格式
   MVCC_ENUMVALUE current;
   std::memset(&current, 0, sizeof(current));
   int ret = MV_CC_GetEnumValue(handle_, "PixelFormat", &current);
@@ -188,10 +177,9 @@ std::string CameraNode::setPixelFormat(const std::string & value)
     return "这台相机不支持 " + value;
   }
   if (current.nCurValue == format->sdk_value) {
-    return "";  // 已经是这个格式
+    return "";
   }
 
-  // 3. PixelFormat 只能在停止取流时修改：先停，改完再开
   const bool was_grabbing = grabbing_;
   if (was_grabbing) {
     MV_CC_StopGrabbing(handle_);
@@ -212,7 +200,6 @@ std::string CameraNode::setPixelFormat(const std::string & value)
   return "";
 }
 
-// 读出相机上这个参数的实际值。调用前必须已经锁住 camera_mutex_
 bool CameraNode::readCameraParameter(const std::string & name, rclcpp::Parameter & out)
 {
   if (name == "exposure_time" || name == "gain") {
@@ -258,10 +245,8 @@ bool CameraNode::readCameraParameter(const std::string & name, rclcpp::Parameter
   return false;
 }
 
-// 相机刚打开（启动或重连）、还没开始取流时调用：把 ROS 参数的值全部写到相机上
 void CameraNode::applyAllCameraParameters()
 {
-  // 先在锁外读出参数值（ROS 参数有自己的锁，两把锁交叉会死锁）
   std::vector<rclcpp::Parameter> params;
   for (const char * name : kCameraParameters) {
     params.push_back(get_parameter(name));
@@ -291,7 +276,6 @@ void CameraNode::applyAllCameraParameters()
     }
   }
 
-  // 设置失败的参数，改成相机的实际值，保证 ros2 param get 看到的就是相机真实状态
   syncing_parameters_ = true;
   for (const auto & actual : corrections) {
     set_parameter(actual);
@@ -304,14 +288,12 @@ void CameraNode::applyAllCameraParameters()
 
 void CameraNode::reportFrameRate()
 {
-  // 节点发布帧率 = 这段时间发布的帧数 / 时间
   const rclcpp::Time current = now();
   const double seconds = (current - last_fps_time_).seconds();
   last_fps_time_ = current;
   const double published_fps =
     seconds > 0.0 ? static_cast<double>(published_frames_.exchange(0)) / seconds : 0.0;
 
-  // 相机端：设置帧率（AcquisitionFrameRate）和实际帧率（ResultingFrameRate）
   bool limit_enabled = false;
   MVCC_FLOATVALUE set_rate;
   MVCC_FLOATVALUE resulting_rate;
@@ -336,4 +318,4 @@ void CameraNode::reportFrameRate()
     set_text.c_str(), resulting_rate.fCurValue, published_fps);
 }
 
-}  // namespace hikrobot_camera
+}

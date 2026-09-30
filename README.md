@@ -1,210 +1,168 @@
-# RoboMaster assignment3 ROS2
-这份仓库提供一个基础工程，供你在 Ubuntu 22.04 / ROS 2 Humble 上，基于海康机器人 MVS SDK 完成相机功能包。
+# hikrobot_camera
 
-目前只有最小节点和启动配置，连接相机、发布图像、参数设置及断线重连需要你完成。目录划分仅供参考，你可以根据需要调整。
+基于海康 MVS SDK 的 ROS 2 相机驱动：按序列号或 IP 打开相机，把图像发布到 `/image_raw`（`sensor_msgs/msg/Image`），曝光、增益、帧率、像素格式可以在运行中修改，相机断线后会自动重连并恢复参数。
 
-## 开始
-
-1. 点击 GitHub 页面右上角的 **Fork**，将仓库复制到你的账号下。
-2. 在你的 Fork 页面点击 **Code**，复制地址并克隆到本地：
-
-   ```bash
-   # 将下面的地址替换为你的 Fork 地址
-   git clone <你的 Fork 地址>
-   cd robomaster-camera-assignment
-   ```
-
-3. 阅读 [ROS 2 教程](docs/ROS2Tutorial.md) 和 [作业要求](docs/assignment.md)，按下面的步骤构建并启动工程。
-4. 在自己的仓库中完成开发，提交并推送改动，最后提交你的 GitHub 仓库链接。
-
-[AGENTS.md](AGENTS.md) 用于约束 AI 助手的帮助范围：你可以用 AI 理解概念和分析问题，核心实现需要自己完成。
-
-## 仓库结构
-
-```text
-robomaster-camera-assignment/          # 同时作为 colcon 工作空间
-├── AGENTS.md                         # AI 助教规范
-├── README.md
-├── docs/ROS2Tutorial.md              # ROS 2 教程
-├── docs/assignment.md                # 作业要求
-└── src/hikrobot_camera/              # ROS 2 功能包
-    ├── package.xml                   # 包信息与依赖
-    ├── CMakeLists.txt                # 构建与安装配置
-    ├── include/hikrobot_camera/
-    │   └── camera_node.hpp          # 节点声明
-    ├── src/
-    │   ├── main.cpp                 # 程序入口
-    │   └── camera_node.cpp          # 在这里开始实现
-    ├── launch/camera.launch.py       # 启动文件
-    ├── config/camera.yaml           # 参数配置
-    ├── cmake/                       # 可按需添加 SDK 查找模块
-    └── test/                        # 可按需添加测试
-```
-
-## 环境与依赖
-
-先安装 ROS 2 Humble 与开发工具，确保 `ros2`、`colcon` 和 `rosdep` 可用。
-
-工程目前没有接入 MVS SDK。你需要从 [海康机器人下载中心](https://www.hikrobotics.com/cn/machinevision/service/download/?module=0) 下载适合系统架构的 SDK，阅读随附文档，并完成构建集成。ROS 和系统依赖可以通过 rosdep 安装，厂商 SDK 需要单独配置。
-
-## 编译
-
-在新终端中进入仓库根目录，运行：
-
-```bash
-source /opt/ros/humble/setup.bash
-# 仅当系统尚未初始化 rosdep 时执行一次：sudo rosdep init
-rosdep update
-rosdep install --from-paths src --ignore-src -r -y --rosdistro humble
-colcon build --symlink-install --packages-select hikrobot_camera
-```
-
-本仓库本身就是工作空间，不需要再放到另一个工作空间的 `src` 中。如果你想使用已有工作空间，也可以只把 `src/hikrobot_camera` 放进去。
-
-## 运行
-
-另开终端，在仓库根目录运行：
-
-```bash
-source /opt/ros/humble/setup.bash
-source install/setup.bash
-ros2 launch hikrobot_camera camera.launch.py
-```
-
-如果你使用 Zsh，将环境脚本的 `.bash` 换为 `.zsh`。
-
-初始工程会输出 `Training scaffold only` 并保持运行，按 Ctrl+C 退出。此时尚未实现相机功能，没有图像话题是正常的。
-
-你也可以指定自己的参数文件：
-
-```bash
-ros2 launch hikrobot_camera camera.launch.py params_file:=/absolute/path/to/camera.yaml
-```
-
-当前 YAML 只配置了 `use_sim_time`。相机相关参数需要你在代码中声明并实现后，再加入配置文件。
-
-## 完成与提交
-
-从 `camera_node.cpp` 的 TODO 开始，按 [作业要求](docs/assignment.md) 完成相机功能。你可以增加源文件或 SDK 封装类，并相应更新构建配置。
-
-完成后：
-
-- 更新 README，说明 SDK 及依赖的安装方式、如何编译启动、有哪些可配置参数。如果有未完成的功能或已知问题，简单注明即可。
-- 将源代码、Launch 和参数配置推送到你的 Fork, 然后提交仓库链接到 2719850558@qq.com，格式为：第三次作业-班级-姓名（第三次作业-自动化2305-周湛昊）
-
-
----
-
-## 在这里解释你的项目
-
-### 1. 功能概览
-
-`hikrobot_camera` 是海康 MVS 工业相机的 ROS 2 Humble 节点：
-
-- 枚举网口（GigE）和 USB3 相机，按 `serial_number` 或 `ip_address` 选择目标相机；找不到、标识冲突、被占用时打印明确的日志。
-- 采集图像，发布 `sensor_msgs/msg/Image`，话题名可配置，默认 `/image_raw`。
-- 曝光时间、增益、帧率、像素格式可以用 ROS 参数读取和动态修改。设置前会检查相机报告的范围，也会检查 SDK 返回值；失败时返回原因，参数保持原值。
-- 断线后自动重连，重连后把参数重新写回相机；退出时按顺序释放资源。
-- 每 5 秒打印一次：设置帧率、相机实际帧率（ResultingFrameRate）、节点发布帧率。
-
-### 2. 环境与依赖
+## 环境要求
 
 | 项目 | 版本 |
 |---|---|
 | 系统 | Ubuntu 22.04 x86_64 |
 | ROS | ROS 2 Humble |
-| 相机 SDK | 海康 MVS 5.1.0（相机 SDK 4.8.2），安装在 `/opt/MVS` |
-| 测试相机 | MV-CA016-10UC（USB3），SN 00F26632041|
+| 相机 SDK | 海康 MVS 5.1.0（SDK V4.8.2.2），安装在 `/opt/MVS` |
 
-#### 2.1 安装 MVS SDK（不能用 rosdep 安装）
+## 仓库结构
 
-MVS 是厂商 SDK，没有 rosdep 规则，需要手动安装：
+```text
+assignment3-ROS2-smw/                 # 仓库根目录，同时是 colcon 工作空间
+├── README.md
+├── AGENTS.md
+├── docs/                             # 培训提供的 ROS 2 教程和作业要求
+└── src/hikrobot_camera/              # 相机功能包
+    ├── package.xml                   # ROS 依赖
+    ├── CMakeLists.txt                # 查找 MVS SDK、编译、安装
+    ├── include/hikrobot_camera/camera_node.hpp
+    ├── src/
+    │   ├── main.cpp                  # 程序入口
+    │   ├── camera_node.cpp           # 节点构造 / 析构
+    │   ├── camera_device.cpp         # 枚举、选择、打开 / 关闭相机
+    │   ├── camera_grab.cpp           # 取图、发布、断线重连
+    │   └── camera_params.cpp         # 相机参数读写、帧率日志
+    ├── launch/camera.launch.py       # 启动文件
+    └── config/camera.yaml            # 参数默认值
+```
 
-1. 到 [海康机器人下载中心](https://www.hikrobotics.com/cn/machinevision/service/download/?module=0) 下载 “MVS” 的 Linux x86_64 版本（本项目用的是 `MVS-5.1.0_Linux_x86_64`）。
-2. 解压后进入目录执行 `sudo ./setup.sh`（也可以安装包里的 `.deb`：`sudo dpkg -i MVS-*.deb`）。默认安装到 `/opt/MVS`。
-3. 安装程序会把环境变量写进 `~/.bashrc`。使用 zsh 时，把下面几行加到 `~/.zshrc`：
+## 安装与依赖
 
-   ```bash
-   export MVCAM_SDK_PATH=/opt/MVS
-   export MVCAM_COMMON_RUNENV=/opt/MVS/lib
-   export MVCAM_GENICAM_CLPROTOCOL=/opt/MVS/lib/CLProtocol
-   export ALLUSERSPROFILE=/opt/MVS/MVFG
-   export LD_LIBRARY_PATH=/opt/MVS/lib/64:/opt/MVS/lib/32:$LD_LIBRARY_PATH
-   ```
+**1. MVS SDK**（厂商 SDK，不能用 rosdep 安装）
 
-4. 检查：`ls /opt/MVS/include/MvCameraControl.h /opt/MVS/lib/64/libMvCameraControl.so` 两个文件都存在。
+从 [海康机器人下载中心](https://www.hikrobotics.com/cn/machinevision/service/download/?module=0) 下载 MVS 的 Linux x86_64 版本，解压后执行 `sudo ./setup.sh`，默认安装到 `/opt/MVS`。如果装在其他目录，编译前设置 `export MVCAM_SDK_PATH=<安装目录>`。
 
-CMake 会按 `MVCAM_SDK_PATH`（没设置时用 `/opt/MVS`）查找 `include/MvCameraControl.h` 和 `lib/64/libMvCameraControl.so`，找不到就报错停止。SDK 装在别的目录时，设置 `MVCAM_SDK_PATH` 即可，不用改 CMakeLists.txt。安装后的可执行文件带有 RPATH，不设置 `LD_LIBRARY_PATH` 也能找到 `libMvCameraControl.so`。
-
-#### 2.2 ROS 依赖
-
-`package.xml` 里声明了 `rclcpp`、`rcl_interfaces`、`sensor_msgs` 等依赖，用 rosdep 安装：
+**2. ROS 依赖**
 
 ```bash
-source /opt/ros/humble/setup.bash
+source /opt/ros/humble/setup.zsh      # bash 用 setup.bash
+sudo rosdep init                       # 只在从没初始化过 rosdep 时执行
 rosdep update
+cd ~/assignment3-ROS2-smw
 rosdep install --from-paths src --ignore-src -r -y --rosdistro humble
 ```
 
-### 3. 编译
+## 编译与运行
+
+下面的命令按 zsh 写，使用 bash 时把 `.zsh` 换成 `.bash`。
+
+### 编译
 
 ```bash
 cd ~/assignment3-ROS2-smw
-source /opt/ros/humble/setup.bash       # zsh 用 setup.zsh
+source /opt/ros/humble/setup.zsh
 colcon build --symlink-install --packages-select hikrobot_camera
 ```
 
-### 4. 运行
+最后显示 `Summary: 1 package finished` 就说明编译成功。修改 `.cpp`、`.hpp` 或 `CMakeLists.txt` 后要重新编译；只改 `camera.yaml` 不用重新编译。
+
+### 运行
+
+**第 1 步：准备相机**
+
+- 关闭 MVS 客户端，否则相机会被占用。
+- 用 USB3 线接上相机。
+- 只接一台相机时不用改配置。接了多台时，在 `src/hikrobot_camera/config/camera.yaml` 里填写 `serial_number`，序列号要加引号，例如 `"00F26632041"`。
+
+**第 2 步：终端 1，启动节点**
 
 ```bash
-source install/setup.bash               # zsh 用 setup.zsh
+cd ~/assignment3-ROS2-smw
+source install/setup.zsh
 ros2 launch hikrobot_camera camera.launch.py
 ```
 
-- 换相机：修改 `src/hikrobot_camera/config/camera.yaml` 里的 `serial_number`，重新 `colcon build` 后启动（用了 `--symlink-install`，改 yaml 后不重新编译也会生效）。
-- 用自己的参数文件：`ros2 launch hikrobot_camera camera.launch.py params_file:=/绝对路径/my_camera.yaml`
-- 临时指定序列号：`ros2 run hikrobot_camera camera_node --ros-args -p serial_number:=00D36741054`
-- 查看图像：`rviz2`，Add → By topic → `/image_raw` → Image；或者 `ros2 run rqt_image_view rqt_image_view`。
-- 启动前要关闭 MVS 客户端，否则相机被占用（错误码 0x80000203）。
+正常情况下，终端会打印 SDK 版本和相机打开的信息，之后每 5 秒打印一行：
+
+```text
+帧率：设置 不限制 | 相机实际 ResultingFrameRate 88.3 fps | 节点发布 88.2 fps
+```
+
+**第 3 步：终端 2，查看图像**
+
+```bash
+rviz2
+```
+
+在 RViz2 左下角点 **Add** → **By topic** → `/image_raw` → **Image** → **OK**，就能看到实时画面。
+
+**第 4 步：终端 3，修改参数（可选）**
+
+```bash
+cd ~/assignment3-ROS2-smw
+source install/setup.zsh
+ros2 param set /hikrobot_camera exposure_time 20000.0    # 调曝光，画面变亮
+ros2 param set /hikrobot_camera pixel_format RGB8Packed  # 换像素格式
+ros2 param get /hikrobot_camera exposure_time            # 读当前值
+ros2 topic hz /image_raw                                 # 测接收帧率
+```
+
+**第 5 步：退出**
+
+在终端 1 按 Ctrl+C。节点会依次停止取流、关闭相机、释放 SDK，最后显示 `process has finished cleanly`。
+
+### 常见问题
+
+| 现象 | 原因和解决方法 |
+|---|---|
+| `Package 'hikrobot_camera' not found` | 这个终端没有 source，先执行 `source install/setup.zsh` |
+| 日志提示相机被占用（`0x80000203`） | MVS 客户端或另一个节点还开着，关掉后节点会自动重试 |
+| `Node not found` 或 `ros2 param` 卡住 | 节点没在运行，或者 ros2 daemon 还是旧的：执行 `ros2 daemon stop` 后重试 |
+| `ros2 param set` 提示类型不对 | double 参数要写小数点，写 `20000.0`，不要写 `20000` |
+| RViz2 画面是黑白的 | 当前是 Mono8 或 Bayer 格式，改成 `YUV422_YUYV_Packed` 或 `RGB8Packed` |
+
+## 相机信息
+
+| 项目 | 值 |
+|---|---|
+| 型号 | MV-CA016-10UC（彩色，USB3） |
+| 序列号 | 00F26632041 |
+| 默认分辨率 | 1440 × 1080 |
+| 曝光范围 | 15 ～ 9999723 μs |
+| 增益范围 | 0 ～ 17.0166 dB |
+
+## 参数
+
+参数写在 `config/camera.yaml` 中。
+
+| 参数 | 类型 | 默认值 | 运行中可改 | 说明 |
+|---|---|---|---|---|
+| `serial_number` | string | `""` | 否 | 相机序列号 |
+| `ip_address` | string | `""` | 否 | 网口相机的 IP，USB 相机留空 |
+| `image_topic` | string | `image_raw` | 否 | 图像话题名 |
+| `frame_id` | string | `camera_optical_frame` | 否 | 图像的 `header.frame_id` |
+| `reconnect_interval` | double | `1.0` | 否 | 打开失败或断线后的重试间隔，单位 s |
+| `exposure_time` | double | `10000.0` | 是 | 曝光时间，单位 μs，设置时自动关闭自动曝光 |
+| `gain` | double | `0.0` | 是 | 增益，单位 dB，设置时自动关闭自动增益 |
+| `frame_rate` | double | `0.0` | 是 | 帧率上限，单位 fps，`0` 表示不限制 |
+| `pixel_format` | string | `YUV422_YUYV_Packed` | 是 | 可选 `Mono8` `BayerRG8` `BayerGR8` `BayerGB8` `BayerBG8` `RGB8Packed` `BGR8Packed` `YUV422_YUYV_Packed` `YUV422_Packed`，还要求相机支持 |
+
+- **范围检查**：设置前先向相机查询范围，超出范围、相机不支持或 SDK 报错时拒绝修改，返回原因，参数值和相机状态都不变。
+- **参数和相机一致**：启动或重连时，如果 yaml 里的值不能用在当前相机上，节点会打印 WARN，并把参数改成相机的实际值。
+- **设置帧率不等于实际帧率**：实际帧率还受曝光和 USB 带宽限制，以日志里的 `ResultingFrameRate` 为准。
 
 选择相机的规则：
 
 | serial_number | ip_address | 行为 |
 |---|---|---|
-| 空 | 空 | 只有一台相机时直接打开它（打印 WARN）；有多台时报错，要求填写 |
-| 填了 | 空 | 打开序列号匹配的相机；找不到时报错，并列出所有相机 |
-| 空 | 填了 | 打开 IP 匹配的网口相机（USB 相机没有 IP） |
-| 填了 | 填了 | 必须是同一台相机，否则报“标识冲突” |
+| 空 | 空 | 只有一台相机时直接打开；有多台时报错 |
+| 填了 | 空 | 打开序列号匹配的相机，找不到时报错并列出所有相机 |
+| 空 | 填了 | 打开 IP 匹配的网口相机 |
+| 填了 | 填了 | 两者必须是同一台相机，否则报标识冲突 |
 
-打开失败时（找不到、被占用、冲突），节点每隔 `reconnect_interval` 秒重试一次，同一类错误日志每 5 秒最多打印一次。
+## 图像消息
 
-### 5. 参数
+话题 `/image_raw`，类型 `sensor_msgs/msg/Image`，QoS 为 Reliable、KeepLast(5)。
 
-| 参数 | 类型 | 单位 | 默认值 | 范围 / 可选值 | 运行中可改 | 说明 |
-|---|---|---|---|---|---|---|
-| `serial_number` | string | — | `""` | — | 否 | 相机序列号，必须加引号 |
-| `ip_address` | string | — | `""` | 点分十进制 IP | 否 | 网口相机 IP |
-| `image_topic` | string | — | `image_raw` | — | 否 | 图像话题名 |
-| `frame_id` | string | — | `camera_optical_frame` | — | 否 | `header.frame_id` |
-| `reconnect_interval` | double | s | `1.0` | > 0 | 否 | 打开失败 / 断线后的重试间隔 |
-| `exposure_time` | double | μs | `10000.0` | 以相机报告为准（测试相机：15 ～ 9999723） | 是 | 设置时自动关闭 ExposureAuto |
-| `gain` | double | dB | `0.0` | 以相机报告为准（测试相机：0 ～ 17.0166） | 是 | 设置时自动关闭 GainAuto |
-| `frame_rate` | double | fps | `0.0` | `0` 或相机报告的范围 | 是 | `0` = 不限制帧率（AcquisitionFrameRateEnable=false）；`> 0` = 打开帧率限制并设置 AcquisitionFrameRate |
-| `pixel_format` | string | — | `YUV422_YUYV_Packed` | `Mono8` `BayerRG8` `BayerGR8` `BayerGB8` `BayerBG8` `RGB8Packed` `BGR8Packed` `YUV422_YUYV_Packed` `YUV422_Packed`，且相机支持 | 是 | 修改时节点会先停止取流，改完再开始 |
-
-设置规则和失败时的行为：
-
-- double 类型参数要写小数点，例如 `ros2 param set /hikrobot_camera exposure_time 20000.0`。写成 `20000` 会被 ROS 以类型不匹配拒绝。
-- 超出范围、相机不支持、SDK 返回错误、相机未连接时，`ros2 param set` 显示 `Setting parameter failed: <原因>`，参数值不变，相机状态也不变。
-- 启动或重连时，如果 yaml 里的值不能用在当前相机上（比如这台相机不支持该像素格式），节点打印 WARN，并把参数改成相机的实际值。这样 `ros2 param get` 读到的始终是相机的真实状态。
-- 设置帧率不等于实际帧率：实际帧率还受曝光时间和 USB / 网络带宽限制，看日志里的 `ResultingFrameRate`。
-
-### 6. 话题与消息
-
-- 话题：`/image_raw`（由 `image_topic` 决定），类型 `sensor_msgs/msg/Image`，QoS 为 Reliable、KeepLast(5)。
-- `header.stamp`：节点从 SDK 拿到这一帧时的 ROS 时间（`now()`），包含曝光结束到传输完成的延迟，不是相机内部时间戳。
-- `width` / `height`：SDK 帧信息里的 `nWidth` / `nHeight`（默认分辨率1440 × 1080）。
-- `encoding` 和 `step`（一行的字节数 = width × 每像素字节数）：
+- `header.stamp`：节点收到这一帧的时间
+- `width` / `height`：图像实际宽高
+- `step`：一行的字节数，等于 `width × 每像素字节数`
+- `data`：长度为 `step × height`
 
 | pixel_format | encoding | 每像素字节数 |
 |---|---|---|
@@ -212,40 +170,31 @@ ros2 launch hikrobot_camera camera.launch.py
 | BayerRG8 / GR8 / GB8 / BG8 | bayer_rggb8 / bayer_grbg8 / bayer_gbrg8 / bayer_bggr8 | 1 |
 | RGB8Packed / BGR8Packed | rgb8 / bgr8 | 3 |
 | YUV422_YUYV_Packed | yuv422_yuy2 | 2 |
-| YUV422_Packed | yuv422（UYVY） | 2 |
+| YUV422_Packed | yuv422 | 2 |
 
-- `data`：从 SDK 缓存复制 `step × height` 个字节，复制完立即 `MV_CC_FreeImageBuffer` 归还缓存。
+## 实现要点
 
-### 7. 实现说明
+- **独立取图线程**：取图线程负责打开相机、取图、发布和重连，主线程负责参数回调和帧率日志，互不阻塞。两个线程用互斥锁保护相机句柄。
+- **断线重连**：SDK 的断线回调只设置一个标志，由取图线程关闭旧句柄，再重新打开相机，并把当前参数写回相机。连续 10 次取图失败也按断线处理。
+- **资源释放**：退出时按“停止线程 → StopGrabbing → CloseDevice → DestroyHandle → Finalize”的顺序释放。
 
-| 文件 | 内容 |
-|---|---|
-| `src/camera_node.cpp` | 构造函数：声明参数、创建发布者 / 定时器、初始化 SDK、启动取图线程；析构函数：停线程、释放资源 |
-| `src/camera_device.cpp` | 枚举、按 SN / IP 选择、打开 / 关闭相机，断线回调，错误码转文字 |
-| `src/camera_grab.cpp` | 像素格式表、开始取流、取一帧并填 Image、取图线程主循环（含重连） |
-| `src/camera_params.cpp` | 参数回调、范围检查、自动曝光 / 增益关闭、像素格式停流修改、重连后恢复参数、帧率日志 |
+## 帧率测试
 
-- 线程：取图线程负责打开相机、取图、发布和重连；ROS 执行器线程负责参数回调和帧率定时器。相机句柄由 `camera_mutex_` 保护。
-- 断线检测：`MV_CC_RegisterExceptionCallBack` 收到 `MV_EXCEPTION_DEV_DISCONNECT` 时只设置标志，由取图线程关闭旧句柄、重新枚举打开；另外连续 10 次取图出错也按断线处理。
-- 释放顺序：停止取图线程 → `MV_CC_StopGrabbing` → `MV_CC_CloseDevice` → `MV_CC_DestroyHandle` → `MV_CC_Finalize`。
+测试条件：1440 × 1080，`frame_rate` 为 0（不限制）。
 
-### 8. 帧率测试
+| pixel_format | 每帧大小 | 相机实际帧率 | 节点发布帧率 |
+|---|---|---|---|
+| YUV422_YUYV_Packed（默认） | 3.1 MB | 88.3 fps | 88.2 fps |
+| RGB8Packed | 4.7 MB | 80.1 fps | 80.0 fps |
+| BayerRG8 | 1.6 MB | 165.9 fps | 166.0 fps |
 
-测试条件：相机MV-CA016-10UC，分辨率1440 × 1080，pixel_format YUV422_YUYV_Packed，exposure_time 10000 μs，frame_rate 0（不限制）。
+在默认格式下用 `ros2 topic hz /image_raw` 测，结果约 54 fps（不开 RViz2 为 53.4 fps，开着 RViz2 为 54.7 fps）。
 
-| 测量方式 | 结果 |
-|---|---|
-| 相机实际帧率（节点日志 ResultingFrameRate） | 88.3fps |
-| 节点发布帧率（节点日志“节点发布”） | 88.2 fps |
-| `ros2 topic hz /image_raw`（不开 RViz2） | 53.4 fps |
-| `ros2 topic hz /image_raw`（开着 RViz2） | 54.7 fps |
+- 曝光设成 5000 μs 或 10000 μs 时，帧率都是 88.3 fps，说明这时限制帧率的是 USB 带宽，每帧越小，帧率越高。
+- 节点发布帧率和相机实际帧率一致，说明节点没有丢帧。`ros2 topic hz` 是 Python 写的，处理 3 MB 的图像时跟不上，所以测出来偏低，这不代表节点的发布能力。
 
-分析：帧率不限制时，相机实际帧率由曝光时间和USB带宽共同决定。曝光10000μs意味着每帧最多100fps。而实测只有88.3 fps，说明此时限制帧率的是 USB 带宽。另外测了其他像素格式：RGB8Packed 每帧 4.7 MB，实测 80.1 fps；BayerRG8 每帧1.6MB；实测165.9 fps；YUV422每帧3.1 MB，实测88.3 fps。每帧字节数越少，帧率越高。节点发布帧率与相机实际帧率基本一致。ros2 topic hz 是 Python 写的订阅者，接收 3 MB 的大图像时跟不上，所以只有约54fps，开不开RViz2差别不大。
+## 已知问题
 
-### 9. 已知问题与限制
-
-- 按 IP 选择的代码已实现，但只用 USB 相机测试过，没有用网口相机实测。
-- 只支持表中 8 位 / 16 位的像素格式；10 / 12 位格式（如 Mono10、BayerRG12）不支持，设置时会被拒绝。
-- Bayer 格式的图像需要下游做去马赛克才能显示彩色；想在 RViz2 里直接看彩色画面，用 `YUV422_YUYV_Packed` 或 `RGB8Packed`。
-- 相机断开期间设置参数会被拒绝（返回“相机未连接”），需要等重连完成后再设置。
-- 图像时间戳是主机接收时间。
+- 不支持 10 位 / 12 位像素格式（如 Mono10、BayerRG12）。
+- Bayer 格式在 RViz2 里需要去马赛克才能显示彩色。
+- 相机断开期间不能修改参数，要等重连完成。

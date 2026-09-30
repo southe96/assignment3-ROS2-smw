@@ -21,8 +21,6 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
   target_compile_options(camera_node PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
-# ---- Hikrobot MVS SDK ----
-# 优先用环境变量 MVCAM_SDK_PATH，没有就用默认的 /opt/MVS
 if(DEFINED ENV{MVCAM_SDK_PATH})
   set(MVS_ROOT "$ENV{MVCAM_SDK_PATH}")
 else()
@@ -50,11 +48,9 @@ endif()
 get_filename_component(MVS_LIBRARY_DIR "${MVS_LIBRARY}" DIRECTORY)
 message(STATUS "Found MVS SDK: ${MVS_LIBRARY}")
 
-# SYSTEM：SDK 头文件里的警告不算到我们头上
 target_include_directories(camera_node SYSTEM PRIVATE "${MVS_INCLUDE_DIR}")
 target_link_libraries(camera_node "${MVS_LIBRARY}")
 
-# 安装后的可执行文件带上 SDK 库目录，不设 LD_LIBRARY_PATH 也能找到 .so
 set_target_properties(camera_node PROPERTIES
   INSTALL_RPATH "${MVS_LIBRARY_DIR}"
 )

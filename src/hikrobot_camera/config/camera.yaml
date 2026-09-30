@@ -1,21 +1,12 @@
 /hikrobot_camera:
   ros__parameters:
     use_sim_time: false
-
-    # ---- 选择相机（启动时读取，运行中不能改）----
-    # 序列号一定要加引号，否则全是数字的序列号会被当成整数
-    serial_number: ""        # 例如 "00D36741054"；留空时：只有一台相机就直接打开它
-    ip_address: ""           # 网口相机才有，例如 "192.168.1.10"；USB 相机留空
-
-    # ---- 话题（启动时读取，运行中不能改）----
+    serial_number: ""
+    ip_address: ""
     image_topic: "image_raw"
     frame_id: "camera_optical_frame"
-
-    # ---- 相机参数（运行中可以用 ros2 param set 修改）----
-    exposure_time: 10000.0    # 曝光时间，单位 us
-    gain: 0.0                # 增益，单位 dB
-    frame_rate: 0.0          # 帧率上限，单位 fps；0 = 不限制
+    exposure_time: 10000.0 
+    gain: 0.0
+    frame_rate: 0.0
     pixel_format: "YUV422_YUYV_Packed"
-
-    # ---- 断线重连（启动时读取）----
-    reconnect_interval: 1.0  # 秒
+    reconnect_interval: 1.0

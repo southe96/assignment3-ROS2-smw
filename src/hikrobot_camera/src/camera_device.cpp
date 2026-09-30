@@ -12,7 +12,6 @@ namespace hikrobot_camera
 
 namespace
 {
-// SDK 里的字符串是固定长度的 unsigned char 数组，末尾不一定有 '\0'
 std::string toString(const unsigned char * text, size_t max_len)
 {
   const char * p = reinterpret_cast<const char *>(text);
@@ -45,7 +44,6 @@ std::string modelOf(const MV_CC_DEVICE_INFO & dev)
   return "unknown";
 }
 
-// 网口相机的 IP 是一个 32 位整数，最高 8 位是第一段；USB 相机没有 IP，返回空字符串
 std::string ipOf(const MV_CC_DEVICE_INFO & dev)
 {
   if (dev.nTLayerType != MV_GIGE_DEVICE) {
@@ -69,7 +67,7 @@ std::string describeDevice(const MV_CC_DEVICE_INFO & dev)
   }
   return text;
 }
-}  // namespace
+} 
 
 std::string sdkErrorToString(int ret)
 {
@@ -93,7 +91,6 @@ std::string sdkErrorToString(int ret)
 
 bool CameraNode::openCamera()
 {
-  // 1. 枚举网口和 USB 相机
   MV_CC_DEVICE_INFO_LIST list;
   std::memset(&list, 0, sizeof(list));
   int ret = MV_CC_EnumDevices(MV_GIGE_DEVICE | MV_USB_DEVICE, &list);
@@ -103,7 +100,6 @@ bool CameraNode::openCamera()
     return false;
   }
 
-  // 相机数量有变化时，把找到的相机都列出来
   const int count = static_cast<int>(list.nDeviceNum);
   if (count != last_device_count_) {
     last_device_count_ = count;
@@ -115,7 +111,6 @@ bool CameraNode::openCamera()
     }
   }
 
-  // 2. 按序列号 / IP 筛选，留空的条件不参与筛选
   std::vector<MV_CC_DEVICE_INFO *> matches;
   for (int i = 0; i < count; ++i) {
     MV_CC_DEVICE_INFO * dev = list.pDeviceInfo[i];
@@ -172,7 +167,6 @@ bool CameraNode::openCamera()
       name.c_str());
   }
 
-  // 3. 检查相机是否被其他程序占用
   if (!MV_CC_IsDeviceAccessible(dev, MV_ACCESS_Exclusive)) {
     RCLCPP_ERROR_THROTTLE(
       get_logger(), *get_clock(), 5000,
@@ -180,7 +174,6 @@ bool CameraNode::openCamera()
     return false;
   }
 
-  // 4. 创建句柄、打开相机
   void * handle = nullptr;
   ret = MV_CC_CreateHandle(&handle, dev);
   if (ret != MV_OK) {
@@ -197,7 +190,6 @@ bool CameraNode::openCamera()
     return false;
   }
 
-  // 5. 网口相机设置最佳包大小（官方 GrabImage 示例里的做法，USB 相机不需要）
   if (dev->nTLayerType == MV_GIGE_DEVICE) {
     const int packet_size = MV_CC_GetOptimalPacketSize(handle);
     if (packet_size > 0) {
@@ -205,13 +197,11 @@ bool CameraNode::openCamera()
     }
   }
 
-  // 6. 关闭触发模式（0 = Off），相机连续出图
   ret = MV_CC_SetEnumValue(handle, "TriggerMode", 0);
   if (ret != MV_OK) {
     RCLCPP_WARN(get_logger(), "关闭触发模式失败：%s", sdkErrorToString(ret).c_str());
   }
 
-  // 7. 阶段 8：注册异常回调，相机断线时 SDK 会调用 onException
   ret = MV_CC_RegisterExceptionCallBack(handle, &CameraNode::onException, this);
   if (ret != MV_OK) {
     RCLCPP_WARN(get_logger(), "注册异常回调失败：%s", sdkErrorToString(ret).c_str());
@@ -233,7 +223,6 @@ void CameraNode::closeCamera()
   if (handle_ == nullptr) {
     return;
   }
-  // 顺序和官方示例一样：停止取流 → 关闭设备 → 销毁句柄
   if (grabbing_) {
     MV_CC_StopGrabbing(handle_);
     grabbing_ = false;
@@ -246,11 +235,10 @@ void CameraNode::closeCamera()
 
 void CameraNode::onException(unsigned int msg_type, void * user)
 {
-  // 这个函数在 SDK 自己的线程里运行，这里只做标记，真正的重连交给取图线程
   auto * self = static_cast<CameraNode *>(user);
   if (msg_type == MV_EXCEPTION_DEV_DISCONNECT) {
     self->disconnected_ = true;
   }
 }
 
-}  // namespace hikrobot_camera
+} 
