@@ -32,8 +32,15 @@ CameraNode::CameraNode(const rclcpp::NodeOptions & options)
     "serial_number", "", describe("要打开的相机序列号，留空表示不按序列号筛选", true));
   ip_address_ = declare_parameter<std::string>(
     "ip_address", "", describe("要打开的网口相机 IP，例如 192.168.1.10；留空表示不按 IP 筛选", true));
+  const std::string image_topic = declare_parameter<std::string>(
+    "image_topic", "image_raw", describe("图像话题名", true));
+  frame_id_ = declare_parameter<std::string>(
+    "frame_id", "camera_optical_frame", describe("图像消息 header.frame_id", true));
 
-  // 2. 初始化 SDK
+  // 2. 图像发布者：队列长度 5，可靠传输（RViz2 默认的 Reliable 能收到）
+  image_pub_ = create_publisher<sensor_msgs::msg::Image>(image_topic, rclcpp::QoS(5));
+
+  // 3. 初始化 SDK
   const int ret = MV_CC_Initialize();
   if (ret != MV_OK) {
     RCLCPP_FATAL(get_logger(), "MV_CC_Initialize 失败：%s", sdkErrorToString(ret).c_str());
@@ -41,15 +48,25 @@ CameraNode::CameraNode(const rclcpp::NodeOptions & options)
   }
   sdk_initialized_ = true;
 
-  // 3. 按序列号 / IP 找到相机并打开
+  // 4. 打开相机 → 开始取流 → 启动取图线程
   if (!openCamera()) {
     RCLCPP_ERROR(get_logger(), "相机没有打开。节点继续运行，但不会出图（阶段 8 会加上自动重试）");
+    return;
   }
+  if (!startGrabbing()) {
+    return;
+  }
+  running_ = true;
+  grab_thread_ = std::thread(&CameraNode::grabLoop, this);
 }
 
 CameraNode::~CameraNode()
 {
-  // 按 CloseDevice → DestroyHandle → Finalize 的顺序释放
+  // 先让取图线程退出，再按 StopGrabbing → CloseDevice → DestroyHandle → Finalize 的顺序释放
+  running_ = false;
+  if (grab_thread_.joinable()) {
+    grab_thread_.join();
+  }
   closeCamera();
   if (sdk_initialized_) {
     MV_CC_Finalize();

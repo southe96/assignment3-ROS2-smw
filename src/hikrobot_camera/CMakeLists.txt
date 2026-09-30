@@ -3,15 +3,17 @@ project(hikrobot_camera)
 
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(sensor_msgs REQUIRED)
 
 add_executable(camera_node
   src/main.cpp
   src/camera_node.cpp
   src/camera_device.cpp
+  src/camera_grab.cpp
 )
 target_compile_features(camera_node PRIVATE cxx_std_17)
 target_include_directories(camera_node PRIVATE include)
-ament_target_dependencies(camera_node rclcpp)
+ament_target_dependencies(camera_node rclcpp sensor_msgs)
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
   target_compile_options(camera_node PRIVATE -Wall -Wextra -Wpedantic)
