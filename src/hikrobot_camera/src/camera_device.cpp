@@ -211,10 +211,18 @@ bool CameraNode::openCamera()
     RCLCPP_WARN(get_logger(), "关闭触发模式失败：%s", sdkErrorToString(ret).c_str());
   }
 
+  // 7. 阶段 8：注册异常回调，相机断线时 SDK 会调用 onException
+  ret = MV_CC_RegisterExceptionCallBack(handle, &CameraNode::onException, this);
+  if (ret != MV_OK) {
+    RCLCPP_WARN(get_logger(), "注册异常回调失败：%s", sdkErrorToString(ret).c_str());
+  }
+
   {
     std::lock_guard<std::mutex> lock(camera_mutex_);
     handle_ = handle;
+    grabbing_ = false;
   }
+  disconnected_ = false;
   RCLCPP_INFO(get_logger(), "已打开相机 %s", name.c_str());
   return true;
 }
@@ -226,12 +234,23 @@ void CameraNode::closeCamera()
     return;
   }
   // 顺序和官方示例一样：停止取流 → 关闭设备 → 销毁句柄
-  // 还没开始取流时 StopGrabbing 会返回错误码，不影响，忽略即可
-  MV_CC_StopGrabbing(handle_);
+  if (grabbing_) {
+    MV_CC_StopGrabbing(handle_);
+    grabbing_ = false;
+  }
   MV_CC_CloseDevice(handle_);
   MV_CC_DestroyHandle(handle_);
   handle_ = nullptr;
   RCLCPP_INFO(get_logger(), "相机已关闭（StopGrabbing → CloseDevice → DestroyHandle）");
+}
+
+void CameraNode::onException(unsigned int msg_type, void * user)
+{
+  // 这个函数在 SDK 自己的线程里运行，这里只做标记，真正的重连交给取图线程
+  auto * self = static_cast<CameraNode *>(user);
+  if (msg_type == MV_EXCEPTION_DEV_DISCONNECT) {
+    self->disconnected_ = true;
+  }
 }
 
 }  // namespace hikrobot_camera

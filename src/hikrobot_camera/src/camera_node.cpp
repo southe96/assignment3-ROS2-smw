@@ -39,6 +39,8 @@ CameraNode::CameraNode(const rclcpp::NodeOptions & options)
     "image_topic", "image_raw", describe("图像话题名", true));
   frame_id_ = declare_parameter<std::string>(
     "frame_id", "camera_optical_frame", describe("图像消息 header.frame_id", true));
+  reconnect_interval_ = declare_parameter<double>(
+    "reconnect_interval", 1.0, describe("打开失败或断线后，每隔多少秒重试一次", true));
   declare_parameter<double>(
     "exposure_time", 5000.0,
     describe("曝光时间，单位 us（微秒）；设置时自动关闭自动曝光；范围以相机为准", false));
@@ -70,15 +72,7 @@ CameraNode::CameraNode(const rclcpp::NodeOptions & options)
   }
   sdk_initialized_ = true;
 
-  // 6. 打开相机 → 把参数写到相机 → 开始取流 → 启动取图线程
-  if (!openCamera()) {
-    RCLCPP_ERROR(get_logger(), "相机没有打开。节点继续运行，但不会出图（阶段 8 会加上自动重试）");
-    return;
-  }
-  applyAllCameraParameters();
-  if (!startGrabbing()) {
-    return;
-  }
+  // 6. 启动取图线程：打开相机、恢复参数、取图、断线重连都在这个线程里做
   running_ = true;
   grab_thread_ = std::thread(&CameraNode::grabLoop, this);
 }

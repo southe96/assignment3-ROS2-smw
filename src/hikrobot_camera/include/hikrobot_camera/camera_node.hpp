@@ -45,11 +45,15 @@ private:
   // ---- 阶段 5：选择、打开、关闭相机（camera_device.cpp）----
   bool openCamera();
   void closeCamera();
+  // ---- 阶段 8：SDK 检测到异常（比如断线）时调用它（camera_device.cpp）----
+  static void onException(unsigned int msg_type, void * user);
 
   // ---- 阶段 6：取图并发布（camera_grab.cpp）----
   bool startGrabbing();
   GrabResult grabOnce(sensor_msgs::msg::Image & msg);
   void grabLoop();
+  // ---- 阶段 8：等待一段时间，节点退出时提前结束（camera_grab.cpp）----
+  void sleepWhileRunning(double seconds);
 
   // ---- 阶段 7：相机参数（camera_params.cpp）----
   rcl_interfaces::msg::SetParametersResult onSetParameters(
@@ -68,6 +72,7 @@ private:
   std::string serial_number_;
   std::string ip_address_;
   std::string frame_id_;
+  double reconnect_interval_ = 1.0;
 
   // 相机句柄和取流状态：多个线程都会用到，读写前先锁 camera_mutex_
   std::mutex camera_mutex_;
@@ -79,6 +84,7 @@ private:
   // 取图线程
   std::thread grab_thread_;
   std::atomic<bool> running_{false};
+  std::atomic<bool> disconnected_{false};
   std::atomic<uint64_t> published_frames_{0};
 
   // 参数

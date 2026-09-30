@@ -134,16 +134,52 @@ CameraNode::GrabResult CameraNode::grabOnce(sensor_msgs::msg::Image & msg)
 
 void CameraNode::grabLoop()
 {
+  int error_count = 0;
   while (running_ && rclcpp::ok()) {
-    // 取一帧，拿到就发布
+    // 1. 还没有打开相机（刚启动或刚断线）：打开 → 恢复参数 → 开始取流
+    if (handle_ == nullptr) {
+      if (!openCamera()) {
+        sleepWhileRunning(reconnect_interval_);
+        continue;
+      }
+      applyAllCameraParameters();
+      if (!startGrabbing()) {
+        closeCamera();
+        sleepWhileRunning(reconnect_interval_);
+        continue;
+      }
+      error_count = 0;
+    }
+
+    // 2. SDK 报告断线，或者连续出错 10 次：关掉旧句柄，下一轮重新打开
+    if (disconnected_ || error_count >= 10) {
+      RCLCPP_WARN(
+        get_logger(), "相机连接断开，释放旧句柄，每 %.1f 秒尝试重连一次", reconnect_interval_);
+      closeCamera();
+      disconnected_ = false;
+      sleepWhileRunning(reconnect_interval_);
+      continue;
+    }
+
+    // 3. 取一帧，拿到就发布
     auto msg = std::make_unique<sensor_msgs::msg::Image>();
     const GrabResult result = grabOnce(*msg);
     if (result == GrabResult::kFrame) {
+      error_count = 0;
       image_pub_->publish(std::move(msg));
       ++published_frames_;
     } else if (result == GrabResult::kError) {
-      std::this_thread::sleep_for(std::chrono::milliseconds(10));  // 出错时别空转占满 CPU
+      ++error_count;
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
+  }
+}
+
+void CameraNode::sleepWhileRunning(double seconds)
+{
+  const auto end = std::chrono::steady_clock::now() + std::chrono::duration<double>(seconds);
+  while (running_ && rclcpp::ok() && std::chrono::steady_clock::now() < end) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
   }
 }
 

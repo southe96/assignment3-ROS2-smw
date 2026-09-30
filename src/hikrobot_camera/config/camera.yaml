@@ -16,3 +16,6 @@
     gain: 0.0                # 增益，单位 dB
     frame_rate: 0.0          # 帧率上限，单位 fps；0 = 不限制
     pixel_format: "YUV422_YUYV_Packed"
+
+    # ---- 断线重连（启动时读取）----
+    reconnect_interval: 1.0  # 秒
