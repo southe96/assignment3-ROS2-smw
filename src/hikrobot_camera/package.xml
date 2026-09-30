@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <package format="3">
   <name>hikrobot_camera</name>
-  <version>0.0.0</version>
-  <description>Training scaffold for a ROS 2 Humble camera SDK assignment.</description>
+  <version>0.1.0</version>
+  <description>ROS 2 Humble camera node for Hikrobot MVS industrial cameras.</description>
   <maintainer email="2696037822@qq.com">盛明伟</maintainer>
   <license>Apache-2.0</license>
   <buildtool_depend>ament_cmake</buildtool_depend>
@@ -12,7 +12,7 @@
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
   <exec_depend>ament_index_python</exec_depend>
-  <!-- Add dependencies when your implementation uses them. -->
+  <!-- Hikrobot MVS SDK cannot be installed by rosdep; see README.md. -->
   <export>
     <build_type>ament_cmake</build_type>
   </export>
