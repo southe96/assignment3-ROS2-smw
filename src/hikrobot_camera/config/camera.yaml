@@ -10,3 +10,9 @@
     # ---- 话题（启动时读取，运行中不能改）----
     image_topic: "image_raw"
     frame_id: "camera_optical_frame"
+
+    # ---- 相机参数（运行中可以用 ros2 param set 修改）----
+    exposure_time: 5000.0    # 曝光时间，单位 us
+    gain: 0.0                # 增益，单位 dB
+    frame_rate: 0.0          # 帧率上限，单位 fps；0 = 不限制
+    pixel_format: "YUV422_YUYV_Packed"

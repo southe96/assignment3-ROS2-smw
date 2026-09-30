@@ -6,7 +6,9 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <vector>
 
+#include "rcl_interfaces/msg/set_parameters_result.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/image.hpp"
 
@@ -49,6 +51,19 @@ private:
   GrabResult grabOnce(sensor_msgs::msg::Image & msg);
   void grabLoop();
 
+  // ---- 阶段 7：相机参数（camera_params.cpp）----
+  rcl_interfaces::msg::SetParametersResult onSetParameters(
+    const std::vector<rclcpp::Parameter> & params);
+  std::string applyCameraParameter(const rclcpp::Parameter & param);
+  std::string setFloatInRange(const char * key, double value);
+  std::string setExposureTime(double value);
+  std::string setGain(double value);
+  std::string setFrameRate(double value);
+  std::string setPixelFormat(const std::string & value);
+  bool readCameraParameter(const std::string & name, rclcpp::Parameter & out);
+  void applyAllCameraParameters();
+  void reportFrameRate();
+
   // 启动时读一次的参数
   std::string serial_number_;
   std::string ip_address_;
@@ -66,8 +81,14 @@ private:
   std::atomic<bool> running_{false};
   std::atomic<uint64_t> published_frames_{0};
 
-  // ROS 发布者
+  // 参数
+  std::atomic<bool> syncing_parameters_{false};
+  OnSetParametersCallbackHandle::SharedPtr param_callback_handle_;
+
+  // ROS 发布者和定时器
   rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr image_pub_;
+  rclcpp::TimerBase::SharedPtr fps_timer_;
+  rclcpp::Time last_fps_time_;
 };
 
 }  // namespace hikrobot_camera

@@ -1,5 +1,8 @@
 #include "hikrobot_camera/camera_node.hpp"
 
+#include <chrono>
+#include <functional>
+
 #include "MvCameraControl.h"
 
 namespace hikrobot_camera
@@ -36,11 +39,30 @@ CameraNode::CameraNode(const rclcpp::NodeOptions & options)
     "image_topic", "image_raw", describe("图像话题名", true));
   frame_id_ = declare_parameter<std::string>(
     "frame_id", "camera_optical_frame", describe("图像消息 header.frame_id", true));
+  declare_parameter<double>(
+    "exposure_time", 5000.0,
+    describe("曝光时间，单位 us（微秒）；设置时自动关闭自动曝光；范围以相机为准", false));
+  declare_parameter<double>(
+    "gain", 0.0, describe("增益，单位 dB；设置时自动关闭自动增益；范围以相机为准", false));
+  declare_parameter<double>(
+    "frame_rate", 0.0, describe("帧率上限，单位 fps；0 表示不限制（相机尽量快）", false));
+  declare_parameter<std::string>(
+    "pixel_format", "YUV422_YUYV_Packed",
+    describe("像素格式，可选：" + supportedPixelFormatNames(), false));
 
-  // 2. 图像发布者：队列长度 5，可靠传输（RViz2 默认的 Reliable 能收到）
+  // 2. 参数回调：每次 ros2 param set 都会先经过它，由它决定这次修改成功还是失败
+  param_callback_handle_ = add_on_set_parameters_callback(
+    std::bind(&CameraNode::onSetParameters, this, std::placeholders::_1));
+
+  // 3. 图像发布者：队列长度 5，可靠传输（RViz2 默认的 Reliable 能收到）
   image_pub_ = create_publisher<sensor_msgs::msg::Image>(image_topic, rclcpp::QoS(5));
 
-  // 3. 初始化 SDK
+  // 4. 每 5 秒打印一次帧率：设置帧率、相机实际帧率、节点发布帧率
+  last_fps_time_ = now();
+  fps_timer_ = create_wall_timer(
+    std::chrono::seconds(5), std::bind(&CameraNode::reportFrameRate, this));
+
+  // 5. 初始化 SDK
   const int ret = MV_CC_Initialize();
   if (ret != MV_OK) {
     RCLCPP_FATAL(get_logger(), "MV_CC_Initialize 失败：%s", sdkErrorToString(ret).c_str());
@@ -48,11 +70,12 @@ CameraNode::CameraNode(const rclcpp::NodeOptions & options)
   }
   sdk_initialized_ = true;
 
-  // 4. 打开相机 → 开始取流 → 启动取图线程
+  // 6. 打开相机 → 把参数写到相机 → 开始取流 → 启动取图线程
   if (!openCamera()) {
     RCLCPP_ERROR(get_logger(), "相机没有打开。节点继续运行，但不会出图（阶段 8 会加上自动重试）");
     return;
   }
+  applyAllCameraParameters();
   if (!startGrabbing()) {
     return;
   }
