@@ -7,6 +7,7 @@ find_package(rclcpp REQUIRED)
 add_executable(camera_node
   src/main.cpp
   src/camera_node.cpp
+  src/camera_device.cpp
 )
 target_compile_features(camera_node PRIVATE cxx_std_17)
 target_include_directories(camera_node PRIVATE include)

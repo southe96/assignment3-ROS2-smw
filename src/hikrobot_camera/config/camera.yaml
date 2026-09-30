@@ -1,5 +1,8 @@
-# Only parameters currently supported by the scaffold are listed here.
-# TODO(student): Design and implement camera parameters before adding them.
 /hikrobot_camera:
   ros__parameters:
     use_sim_time: false
+
+    # ---- 选择相机（启动时读取，运行中不能改）----
+    # 序列号一定要加引号，否则全是数字的序列号会被当成整数
+    serial_number: "00F26632041"        # 例如 "00D36741054"；留空时：只有一台相机就直接打开它
+    ip_address: ""           # 网口相机才有，例如 "192.168.1.10"；USB 相机留空
